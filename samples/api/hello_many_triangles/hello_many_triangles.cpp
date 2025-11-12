@@ -87,7 +87,9 @@ void HelloManyTriangles::add_render_pass(const char *description, const glm::vec
 	}
 
 	// Create render pass
-	VkAttachmentDescription attachment{
+	std::array<VkAttachmentDescription, 2> attachments{};
+	// Color attachment
+	attachments[0] = {
 	    .format         = get_render_context().get_format(),
 	    .samples        = VK_SAMPLE_COUNT_1_BIT,
 	    .loadOp         = load_op,
@@ -97,13 +99,50 @@ void HelloManyTriangles::add_render_pass(const char *description, const glm::vec
 	    .initialLayout  = initial_layout,
 	    .finalLayout    = final_layout};
 
+	// Depth attachment
+	attachments[1] = {
+	    .format         = depth_format,
+	    .samples        = VK_SAMPLE_COUNT_1_BIT,
+	    .loadOp         = VK_ATTACHMENT_LOAD_OP_CLEAR,
+	    .storeOp        = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+	    .stencilLoadOp  = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+	    .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+	    .initialLayout  = VK_IMAGE_LAYOUT_UNDEFINED,
+	    .finalLayout    = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL};
+
 	VkAttachmentReference color_ref = {0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL};
+	VkAttachmentReference depth_ref = {1, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL};
 
-	VkSubpassDescription subpass{.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS, .colorAttachmentCount = 1, .pColorAttachments = &color_ref};
+	VkSubpassDescription subpass{.pipelineBindPoint       = VK_PIPELINE_BIND_POINT_GRAPHICS,
+	                             .colorAttachmentCount    = 1,
+	                             .pColorAttachments       = &color_ref,
+	                             .pDepthStencilAttachment = &depth_ref};
 
-	VkSubpassDependency dependency{.srcSubpass = VK_SUBPASS_EXTERNAL, .dstSubpass = 0, .srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, .dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, .srcAccessMask = 0, .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT};
+	std::array<VkSubpassDependency, 2> dependencies{};
 
-	VkRenderPassCreateInfo rp_info{.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO, .attachmentCount = 1, .pAttachments = &attachment, .subpassCount = 1, .pSubpasses = &subpass, .dependencyCount = 1, .pDependencies = &dependency};
+	dependencies[0].srcSubpass      = VK_SUBPASS_EXTERNAL;
+	dependencies[0].dstSubpass      = 0;
+	dependencies[0].srcStageMask    = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+	dependencies[0].dstStageMask    = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+	dependencies[0].srcAccessMask   = VK_ACCESS_NONE_KHR;
+	dependencies[0].dstAccessMask   = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+	dependencies[0].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
+
+	dependencies[1].srcSubpass      = 0;
+	dependencies[1].dstSubpass      = VK_SUBPASS_EXTERNAL;
+	dependencies[1].srcStageMask    = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+	dependencies[1].dstStageMask    = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+	dependencies[1].srcAccessMask   = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+	dependencies[1].dstAccessMask   = VK_ACCESS_MEMORY_READ_BIT;
+	dependencies[1].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
+
+	VkRenderPassCreateInfo rp_info{.sType           = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
+	                               .attachmentCount = static_cast<uint32_t>(attachments.size()),
+	                               .pAttachments    = attachments.data(),
+	                               .subpassCount    = 1,
+	                               .pSubpasses      = &subpass,
+	                               .dependencyCount = static_cast<uint32_t>(dependencies.size()),
+	                               .pDependencies   = dependencies.data()};
 
 	VK_CHECK(vkCreateRenderPass(get_device().get_handle(), &rp_info, nullptr, &data.render_pass));
 
@@ -279,8 +318,9 @@ void HelloManyTriangles::render_triangle(uint32_t swapchain_index, const std::ve
 	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
 
 	// Set clear color values.
-	VkClearValue clear_value{
-	    .color = {{0.01f, 0.01f, 0.033f, 1.0f}}};
+	std::array<VkClearValue, 2> clear_values{};
+	clear_values[0].color        = {{0.01f, 0.01f, 0.033f, 1.0f}};
+	clear_values[1].depthStencil = {1.0f, 0};
 
 	float      scale              = 1.0;
 	uint32_t   scaled_width       = static_cast<uint32_t>(get_render_context().get_surface_extent().width * scale);
@@ -328,8 +368,8 @@ void HelloManyTriangles::render_triangle(uint32_t swapchain_index, const std::ve
 		    .renderPass      = pass_data.render_pass,
 		    .framebuffer     = framebuffer,
 		    .renderArea      = {.offset = render_area_offset, .extent = render_area_extent},
-		    .clearValueCount = 1,
-		    .pClearValues    = &clear_value};        // Clear value is only used by the first pass
+		    .clearValueCount = static_cast<uint32_t>(clear_values.size()),
+		    .pClearValues    = clear_values.data()};
 		// We will add draw commands in the same command buffer.
 		vkCmdBeginRenderPass(cmd, &rp_begin, VK_SUBPASS_CONTENTS_INLINE);
 
