@@ -77,6 +77,7 @@ void HelloManyTriangles::add_render_pass(const char *description, const glm::vec
 	VmaAllocationCreateInfo buffer_alloc_ci{.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT, .usage = VMA_MEMORY_USAGE_AUTO, .requiredFlags = VK_MEMORY_PROPERTY_HOST_COHERENT_BIT};
 	VmaAllocationInfo       buffer_alloc_info{};
 	vmaCreateBuffer(vkb::allocated::get_memory_allocator(), &buffer_info, &buffer_alloc_ci, &data.vertex_buffer, &data.vertex_buffer_allocation, &buffer_alloc_info);
+	get_device().get_debug_utils().set_debug_name(get_device().get_handle(), VK_OBJECT_TYPE_BUFFER, reinterpret_cast<uint64_t>(data.vertex_buffer), (std::string(description) + " - Vertex Buffer").c_str());
 	if (buffer_alloc_info.pMappedData)
 	{
 		memcpy(buffer_alloc_info.pMappedData, vertices.data(), buffer_size);
@@ -145,6 +146,7 @@ void HelloManyTriangles::add_render_pass(const char *description, const glm::vec
 	                               .pDependencies   = dependencies.data()};
 
 	VK_CHECK(vkCreateRenderPass(get_device().get_handle(), &rp_info, nullptr, &data.render_pass));
+	get_device().get_debug_utils().set_debug_name(get_device().get_handle(), VK_OBJECT_TYPE_RENDER_PASS, reinterpret_cast<uint64_t>(data.render_pass), description);
 
 	render_pass_data.push_back(data);
 }
@@ -156,6 +158,7 @@ void HelloManyTriangles::prepare_pipelines()
 	VkPipelineLayoutCreateInfo layout_info{
 	    .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
 	VK_CHECK(vkCreatePipelineLayout(get_device().get_handle(), &layout_info, nullptr, &pipeline_layout));
+	get_device().get_debug_utils().set_debug_name(get_device().get_handle(), VK_OBJECT_TYPE_PIPELINE_LAYOUT, reinterpret_cast<uint64_t>(pipeline_layout), "HelloManyTrianglesPipelineLayout");
 
 	// The Vertex input properties define the interface between the vertex buffer and the vertex shader.
 
@@ -246,6 +249,7 @@ void HelloManyTriangles::prepare_pipelines()
 	};
 
 	VK_CHECK(vkCreateGraphicsPipelines(get_device().get_handle(), pipeline_cache, 1, &pipe, nullptr, &pipeline));
+	get_device().get_debug_utils().set_debug_name(get_device().get_handle(), VK_OBJECT_TYPE_PIPELINE, reinterpret_cast<uint64_t>(pipeline), "HelloManyTrianglesPipeline");
 }
 
 void HelloManyTriangles::render(float delta_time)
