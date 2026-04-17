@@ -23,7 +23,7 @@
 #define VMA_IMPLEMENTATION
 #include <vk_mem_alloc.h>
 
-#if defined(VKB_DEBUG) || defined(VKB_VALIDATION_LAYERS)
+#if defined(VKB_VALIDATION_LAYERS)
 #	define USE_VALIDATION_LAYERS
 #endif
 
